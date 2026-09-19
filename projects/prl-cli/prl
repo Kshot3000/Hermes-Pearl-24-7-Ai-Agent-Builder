@@ -1,0 +1,317 @@
+#!/usr/bin/env python3
+"""prl — a thin JSON-RPC client for Pearl nodes (pearld).
+
+Part of the 24/7 Pearl agent's Build-half roadmap. Stdlib-only, single file,
+no dependencies. Speaks the standard btcd-style JSON-RPC that pearld exposes
+(default port 44107 mainnet / 44109 testnet; HTTP or Unix socket).
+
+Examples:
+  prl status
+  prl block 115681
+  prl tx <hash>
+  prl mempool --limit 10
+  prl check prl1...          # validate a Pearl address (uses repo validator)
+  prl raw getblockcount      # any other RPC method passes through
+  prl raw getblockhash 100
+  prl status --rpc-url http://10.0.0.5:44107 --user bob --pass secret
+  prl status --socket /path/to/pearld.sock
+  PRL_RPC_URL=... PRL_RPC_USER=... PRL_RPC_PASS=... prl status
+
+Exit codes: 0 ok, 1 RPC/transport error, 2 usage / invalid address.
+"""
+import argparse
+import base64
+import http.client
+import json
+import os
+import socket
+import sys
+import textwrap
+
+VERSION = "0.1.0"
+
+# --- address validation: prefer this repo's stdlib-only validator -----------
+def _load_validator():
+    here = os.path.dirname(os.path.abspath(__file__))
+    tools = os.path.normpath(os.path.join(here, "..", "..", "tools"))
+    if os.path.exists(os.path.join(tools, "verify_pearl_address.py")):
+        sys.path.insert(0, tools)
+        try:
+            import verify_pearl_address  # noqa: N813
+            return verify_pearl_address
+        except Exception:
+            pass
+    return None
+
+# ---------------------------------------------------------------------------
+# JSON-RPC transport (HTTP and Unix socket)
+# ---------------------------------------------------------------------------
+def rpc_call(target, method, params, user=None, password="", timeout=10.0):
+    """One JSON-RPC call. target is http(s)://host:port or a unix socket path."""
+    body = json.dumps({"jsonrpc": "2.0", "id": 1,
+                       "method": method, "params": params}).encode()
+    headers = [
+        ("Content-Type", "application/json"),
+        ("Content-Length", str(len(body))),
+        ("Connection", "close"),
+    ]
+    if user:
+        headers.append(("Authorization", "Basic " +
+                        base64.b64encode(f"{user}:{password}".encode()).decode()))
+
+    if target.startswith(("http://", "https://")):
+        scheme, rest = target.split("://", 1)
+        hostport = rest
+        conn_cls = http.client.HTTPSConnection if scheme == "https" else http.client.HTTPConnection
+        try:
+            conn = conn_cls(hostport, timeout=timeout)
+        except Exception as e:
+            raise RuntimeError(f"bad rpc-url {target!r}: {e}")
+        conn.request("POST", "/", body=body, headers=dict(headers))
+        resp = conn.getresponse()
+        raw = resp.read()
+        conn.close()
+        status, reason = resp.status, resp.reason
+    else:
+        # Unix socket: hand-rolled minimal HTTP/1.0 request
+        if not hasattr(socket, "AF_UNIX"):
+            raise RuntimeError("Unix socket RPC is not available on this platform")
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        try:
+            sock.connect(target)
+            req = (b"POST / HTTP/1.0\r\nHost: localhost\r\n" +
+                   b"".join(f"{k}: {v}\r\n".encode() for k, v in headers) +
+                   b"\r\n" + body)
+            sock.sendall(req)
+            data = b""
+            while True:
+                chunk = sock.recv(65536)
+                if not chunk:
+                    break
+                data += chunk
+        finally:
+            sock.close()
+        head, _, payload = data.partition(b"\r\n\r\n")
+        first = head.split(b"\r\n", 1)[0].decode("latin1")
+        try:
+            status, reason = int(first.split()[1]), first.split()[2]
+        except Exception:
+            status, reason = 0, first
+        raw = payload
+
+    if status != 200:
+        raise RuntimeError(f"RPC HTTP {status} {reason}: {raw[:300]!r}")
+    try:
+        msg = json.loads(raw)
+    except Exception:
+        raise RuntimeError(f"non-JSON response: {raw[:300]!r}")
+    if "error" in msg and msg["error"]:
+        err = msg["error"]
+        raise RuntimeError(f"RPC error {err.get('code')}: {err.get('message')}")
+    return msg.get("result")
+
+
+class Client:
+    def __init__(self, target, user=None, password="", timeout=10.0):
+        self.target = target
+        self.user = user
+        self.password = password
+        self.timeout = timeout
+
+    def call(self, method, *params):
+        return rpc_call(self.target, method, list(params),
+                        user=self.user, password=self.password,
+                        timeout=self.timeout)
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+def cmd_status(c, args):
+    info = c.call("getblockchaininfo")
+    diff = c.call("getdifficulty")
+    mem = c.call("getmempoolinfo")
+    if args.json:
+        print(json.dumps({"blockchain": info, "difficulty": diff, "mempool": mem},
+                         indent=2))
+        return
+    print(f"chain          {info.get('chain')}")
+    print(f"blocks         {info.get('blocks')}")
+    print(f"best block     {info.get('bestblockhash')}")
+    print(f"difficulty     {diff}")
+    print(f"mediantime     {info.get('mediantime')}")
+    print(f"pruned         {info.get('pruned', False)}")
+    print(f"mempool        {mem.get('size')} tx / {mem.get('bytes')} bytes")
+
+
+def _is_height(s):
+    return s.isdigit()
+
+
+def cmd_block(c, args):
+    ref = int(args.ref) if args.ref and args.ref.isdigit() else (args.ref or 0)
+    res = c.call("getblock", ref, 1)  # verbose=1 -> decoded object
+    if args.json:
+        print(json.dumps(res, indent=2))
+        return
+    print(f"height     {res.get('height')}")
+    print(f"hash       {res.get('hash')}")
+    print(f"previous   {res.get('previousblockhash')}")
+    print(f"nonce      {res.get('nonce')}")
+    print(f"version    {res.get('version')}")
+    print(f"bits       {res.get('bits')}")
+    print(f"time       {res.get('time')}")
+    print(f"difficulty {res.get('difficulty')}")
+    print(f"txs        {len(res.get('tx', []))}")
+    print(f"merkle     {res.get('merkleroot')}")
+
+
+def cmd_tx(c, args):
+    res = c.call("getrawtransaction", args.hash, 1)  # verbose=1
+    if args.json:
+        print(json.dumps(res, indent=2))
+        return
+    print(f"hash       {res.get('txid')}")
+    print(f"version    {res.get('version')}")
+    print(f"locktime   {res.get('locktime')}")
+    print(f"size       {res.get('size')} bytes")
+    for i, v in enumerate(res.get("vin", [])):
+        prev = v.get("prevout", {})
+        print(f"  in{i}   {prev.get('txid')}:{prev.get('vout')}")
+    for i, v in enumerate(res.get("vout", [])):
+        spk = v.get("scriptpubkey") or {}
+        addr = spk.get("address")
+        line = f"  out{i}  {v.get('value')}"
+        if addr:
+            line += f"  -> {addr}"
+        line += f"  scriptPubKey {spk.get('hex')}"
+        print(line)
+
+
+def cmd_mempool(c, args):
+    hashes = c.call("getrawmempool", False)
+    if args.json:
+        print(json.dumps(hashes, indent=2))
+        return
+    limit = args.limit or 20
+    print(f"mempool: {len(hashes)} tx (showing {min(limit, len(hashes))})")
+    for h in hashes[:limit]:
+        print(" ", h)
+
+
+def cmd_check(c, args):
+    vpa = _load_validator()
+    rc = 0
+    for addr in args.addresses:
+        if vpa is None:
+            print(f"{addr}  (validator module not found — skipped)")
+            rc = 2
+            continue
+        try:
+            dec = vpa.decode(addr)
+        except Exception:
+            dec = None
+        if dec is None:
+            print(f"INVALID  {addr}")
+            rc = 2
+        else:
+            hrp, witver, program = dec
+            tag = "mainnet" if hrp == "prl" else ("testnet" if hrp == "tprl" else hrp)
+            print(f"OK       {addr}  ({tag}, witness v{witver}, {len(program)} bytes)")
+    return rc
+
+
+def cmd_raw(c, args):
+    params = []
+    for p in args.params:
+        try:
+            params.append(json.loads(p))
+        except Exception:
+            params.append(p)
+    res = c.call(args.method, *params)
+    print(json.dumps(res, indent=2) if not isinstance(res, (str, int, float)) else str(res))
+
+
+def cmd_version(c, args):
+    print(f"prl-cli {VERSION} — 24/7 Pearl agent (https://github.com/Kshot3000/Hermes-Pearl-24-7-Ai-Agent-Builder)")
+    try:
+        print(f"node version {c.call('getnetworkinfo').get('version')}")
+    except Exception as e:
+        print(f"node unreachable: {e}")
+
+
+# ---------------------------------------------------------------------------
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        prog="prl",
+        description="Thin JSON-RPC client for Pearl nodes (pearld). "
+                    "Use 'prl raw <method> [json-args...]' for any other RPC method.")
+    ap.add_argument("--rpc-url", default=os.environ.get("PRL_RPC_URL"),
+                    help="node RPC endpoint (default http://127.0.0.1:44107, "
+                         "testnet port 44109 when --testnet is set)")
+    ap.add_argument("--socket", default=os.environ.get("PRL_RPC_SOCKET"),
+                    help="Unix socket path (overrides --rpc-url)")
+    ap.add_argument("--user", default=os.environ.get("PRL_RPC_USER"), help="RPC username")
+    ap.add_argument("--pass", dest="password", default=os.environ.get("PRL_RPC_PASS"),
+                    help="RPC password")
+    ap.add_argument("--testnet", action="store_true", help="target testnet defaults")
+    ap.add_argument("--timeout", type=float, default=10.0)
+    ap.add_argument("--json", action="store_true", help="raw JSON output")
+    ap.add_argument("-V", "--version", action="store_true", help="show version and exit")
+    sub = ap.add_subparsers(dest="cmd")
+
+    sub.add_parser("status", help="blockchain + mempool summary")
+    pb = sub.add_parser("block", help="get block by height or hash")
+    pb.add_argument("ref", nargs="?", help="block height (number) or hash")
+    pm = sub.add_parser("mempool", help="list mempool txs")
+    pm.add_argument("--limit", type=int, default=20)
+    pt = sub.add_parser("tx", help="get transaction by hash (decoded)")
+    pt.add_argument("hash")
+    pc = sub.add_parser("check", help="validate Pearl address(es)")
+    pc.add_argument("addresses", nargs="+")
+    pr = sub.add_parser("raw", help="raw RPC: prl raw <method> [json-args...]")
+    pr.add_argument("method")
+    pr.add_argument("params", nargs="*")
+    sub.add_parser("version", help="client + node version")
+
+    args = ap.parse_args(argv)
+    if args.version:
+        print(f"prl-cli {VERSION}")
+        return 0
+    if not args.cmd:
+        ap.print_help()
+        return 2
+
+    # resolve target
+    if args.socket:
+        target = args.socket
+    else:
+        default_port = "44109" if args.testnet else "44107"
+        target = args.rpc_url or f"http://127.0.0.1:{default_port}"
+    client = Client(target, user=args.user, password=args.password or "",
+                    timeout=args.timeout)
+
+    try:
+        if args.cmd == "status":
+            cmd_status(client, args)
+        elif args.cmd == "block":
+            cmd_block(client, args)
+        elif args.cmd == "tx":
+            cmd_tx(client, args)
+        elif args.cmd == "mempool":
+            cmd_mempool(client, args)
+        elif args.cmd == "check":
+            return cmd_check(client, args)
+        elif args.cmd == "raw":
+            cmd_raw(client, args)
+        elif args.cmd == "version":
+            cmd_version(client, args)
+        return 0
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

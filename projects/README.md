@@ -19,6 +19,7 @@ Rules:
   **LIVE** at https://kshot3000.github.io/Hermes-Pearl-24-7-Ai-Agent-Builder/
 - `prl-cli/` — thin RPC client (`getblockcount`, `getblock`,
   `listunspent` against a local `pearld`, address verification baked in).
+  **DONE** — 16-test suite (mock node), stdlib-only, HTTP + Unix socket.
 - `zkpow-bench/` — local benchmark harness for zkPoW proof verification
   (times VerifyZKProofFFI paths against known-good proofs).
 - `prl-watcher/` — release/changelog diff monitor: alerts when upstream

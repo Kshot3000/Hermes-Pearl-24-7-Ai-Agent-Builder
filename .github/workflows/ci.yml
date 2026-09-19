@@ -18,6 +18,8 @@ jobs:
         run: |
           ADDR=$(python -c "import json;print(json.load(open('attribution.json'))['donation_address'])")
           python tools/verify_pearl_address.py "$ADDR"
+      - name: prl-cli test suite (mock node)
+        run: python projects/prl-cli/tests/test_prl_cli.py
       - name: Attribution renders and is non-empty
         run: |
           python tools/attribution.py | grep -q "prl1"
