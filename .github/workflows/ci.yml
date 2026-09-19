@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Address validator self-test
+        run: python tests/test_verify_pearl_address.py
+      - name: Verify configured donation address
+        run: |
+          ADDR=$(python -c "import json;print(json.load(open('attribution.json'))['donation_address'])")
+          python tools/verify_pearl_address.py "$ADDR"
+      - name: Attribution renders and is non-empty
+        run: |
+          python tools/attribution.py | grep -q "prl1"
+          python tools/attribution.py --format json | python -m json.tool > /dev/null
