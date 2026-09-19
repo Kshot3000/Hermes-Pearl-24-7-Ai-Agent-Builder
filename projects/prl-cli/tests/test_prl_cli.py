@@ -140,18 +140,26 @@ def make_sock_server(path):
             except OSError:
                 return
             try:
+                # Read the header block first...
                 data = b""
-                while True:
+                while b"\r\n\r\n" not in data:
                     chunk = conn.recv(65536)
                     if not chunk:
                         break
                     data += chunk
                 head, _, body = data.partition(b"\r\n\r\n")
-                nlines = head.split(b"\r\n")
                 n = 0
-                for l in nlines:
+                for l in head.split(b"\r\n"):
                     if l.lower().startswith(b"content-length"):
                         n = int(l.split(b":")[1])
+                # ...then read exactly Content-Length more bytes. Do NOT wait
+                # for EOF: real HTTP/1.0 clients (including this CLI) keep the
+                # socket open while waiting for the response.
+                while len(body) < n:
+                    chunk = conn.recv(65536)
+                    if not chunk:
+                        break
+                    body += chunk
                 msg = json.loads(body[:n] or b"{}")
                 method = msg.get("method")
                 if method in RESPONSES:
