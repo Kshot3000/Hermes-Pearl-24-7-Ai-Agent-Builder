@@ -6,7 +6,10 @@ Proof-of-AI (zkPoW) PoW chain where mining is done by AI inference.
 
 ## Mission
 
-Run an always-on agent loop:
+Run an always-on agent loop with a standing **50/50 workload split** —
+half the effort on the upstream chain, half on net-new ecosystem builds:
+
+**Track & fix (50%)**
 
 1. **Track** — watch [PEARL releases](https://github.com/pearl-research-labs/pearl/releases),
    open issues/PRs, and mainnet health via the
@@ -17,7 +20,13 @@ Run an always-on agent loop:
 3. **Fix & ship** — file issues, open PRs against upstream
    (`pearl-research-labs/pearl`) with conventional commits and full CI
    green before merge.
-4. **Report** — every deliverable carries the attribution block below.
+
+**Build (50%)**
+
+4. **Build** — author brand-new code, apps, and websites for the Pearl
+   ecosystem (tools, RPC clients, mining/dashboard utilities, community
+   sites) — living in `projects/` in this repo.
+5. **Report** — every deliverable carries the attribution block below.
 
 ## Repository layout
 
@@ -27,6 +36,7 @@ Run an always-on agent loop:
 | `tools/verify_pearl_address.py` | Standalone validator for `prl1…` (mainnet) / `tprl1…` (testnet) Taproot addresses — pure stdlib, BIP-173/350 bech32(bech32m). |
 | `tools/attribution.py` | Renders the attribution block from `attribution.json` (markdown / text / json). |
 | `docs/` | Research notes, release digests, and agent run logs. |
+| `projects/` | Brand-new apps, tools, and websites built for the Pearl ecosystem. |
 | `.github/workflows/` | CI: attribution integrity + address-validator self-test on every push/PR. |
 
 ## Attribution
