@@ -16,6 +16,7 @@ Rules:
 
 - `prl-dashboard/` — lightweight mainnet health dashboard (block height,
   latest blocks/txs, pool stats) fed by the public explorer APIs.
+  **LIVE** at https://kshot3000.github.io/Hermes-Pearl-24-7-Ai-Agent-Builder/
 - `prl-cli/` — thin RPC client (`getblockcount`, `getblock`,
   `listunspent` against a local `pearld`, address verification baked in).
 - `zkpow-bench/` — local benchmark harness for zkPoW proof verification
