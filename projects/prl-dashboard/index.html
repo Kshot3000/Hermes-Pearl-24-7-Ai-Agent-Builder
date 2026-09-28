@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PEARL Mainnet Dashboard — live chain health</title>
+<meta name="description" content="Live Pearl (zkPoW) mainnet dashboard: block height, difficulty, pool leaderboard, and PRL market data. Built by the 24/7 Pearl agent.">
+<style>
+  :root {
+    --bg: #0a0e14; --panel: #11161f; --panel2: #161d29;
+    --line: #223047; --fg: #e8eef7; --muted: #8b9bb4; --dim: #5a6b85;
+    --acc: #5eead4; --acc2: #818cf8; --up: #34d399; --down: #f87171;
+    --mono: "Cascadia Code", "JetBrains Mono", "Fira Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 18px 60px; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  .logo { font-size: 26px; font-weight: 800; letter-spacing: 2px; }
+  .logo b { color: var(--acc); }
+  .tag { font-size: 12.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+  .statusline { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin: 10px 0 20px; }
+  .statusline b { color: var(--fg); font-family: var(--mono); font-weight: 600; }
+  .live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--up); box-shadow: 0 0 8px var(--up); animation: pulse 2s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(12, 1fr); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 1.6px; color: var(--dim); margin-bottom: 12px; font-weight: 600; }
+  .kpi { grid-column: span 3; }
+  .kpi .v { font-family: var(--mono); font-size: 24px; font-weight: 700; line-height: 1.2; }
+  .kpi .s { font-size: 12.5px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
+  .span12 { grid-column: span 12; }
+  .span6 { grid-column: span 6; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 8px; border-bottom: 1px solid #1a2230; font-family: var(--mono); font-size: 12.5px; }
+  tr:last-child td { border-bottom: none; }
+  td.name { font-family: system-ui; font-weight: 600; }
+  .bar { height: 4px; background: var(--panel2); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--acc), var(--acc2)); }
+  .block { display: flex; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid #1a2230; font-family: var(--mono); font-size: 12.5px; }
+  .block:last-child { border-bottom: none; }
+  .block .h { color: var(--acc); font-weight: 700; min-width: 86px; }
+  .block .m { color: var(--muted); }
+  .block .t { margin-left: auto; color: var(--dim); font-size: 11.5px; }
+  .hash { color: var(--muted); text-decoration: none; }
+  .hash:hover { color: var(--acc); }
+  .badge { font-size: 10.5px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; color: var(--muted); white-space: nowrap; }
+  footer { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); line-height: 1.9; }
+  footer a { color: var(--acc); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  footer .addr { font-family: var(--mono); font-size: 11.5px; word-break: break-all; color: var(--fg); background: var(--panel2); display: inline-block; padding: 4px 8px; border-radius: 6px; margin-top: 6px; }
+  .err { color: var(--down); font-family: var(--mono); font-size: 12.5px; padding: 8px 0; display: none; }
+  @media (max-width: 820px) { .kpi, .span6 { grid-column: span 12; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">PEARL <b>·</b> Mainnet</div>
+    <div class="tag">zkPoW · live</div>
+    <div class="tag">24/7 agent build</div>
+  </header>
+
+  <div class="statusline">
+    <span><span class="live" id="dot"></span> <span id="status">connecting…</span></span>
+    <span>mempool <b id="mempool">—</b></span>
+    <span>indexer lag <b id="lag">—</b></span>
+    <span>updated <b id="updated">—</b></span>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="grid">
+    <div class="card kpi"><h2>Block height</h2><div class="v" id="height">—</div><div class="s" id="heightsub"></div></div>
+    <div class="card kpi"><h2>Block time (30)</h2><div class="v" id="blocktime">—</div><div class="s" id="blocktimesub"></div></div>
+    <div class="card kpi"><h2>Difficulty</h2><div class="v" id="diff">—</div><div class="s" id="diffsub"></div></div>
+    <div class="card kpi"><h2>PRL price</h2><div class="v" id="price">—</div><div class="s" id="pricesub"></div></div>
+
+    <div class="card span6"><h2>Latest blocks</h2><div id="blocks">—</div></div>
+    <div class="card span6"><h2>Market — PRL/USD</h2>
+      <table>
+        <tr><td>Price</td><td style="text-align:right" id="mprice">—</td></tr>
+        <tr><td>24h change</td><td style="text-align:right" id="m24h">—</td></tr>
+        <tr><td>Exchange vol (24h)</td><td style="text-align:right" id="vol">—</td></tr>
+        <tr><td>Observed OTC (24h)</td><td style="text-align:right" id="otc">—</td></tr>
+        <tr><td>Source</td><td style="text-align:right" id="msrc">—</td></tr>
+      </table>
+    </div>
+
+    <div class="card span12"><h2>Pool leaderboard — 24h</h2>
+      <table id="poolstable">
+        <thead><tr>
+          <th>#</th><th>Pool</th><th style="text-align:right">Hashrate (24h)</th>
+          <th style="text-align:right">Network share</th><th style="text-align:right">Blocks (24h)</th>
+          <th style="text-align:right">Fee</th><th style="text-align:right">Workers</th>
+          <th style="width:20%">Share</th>
+        </tr></thead>
+        <tbody id="pools"><tr><td colspan="8" style="color:var(--dim)">loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    Built by the 24/7 Pearl agent ·
+    <a href="https://github.com/Kshot3000/Hermes-Pearl-24-7-Ai-Agent-Builder" target="_blank" rel="noopener">github.com/Kshot3000</a> ·
+    <a href="https://x.com/kshot9000" target="_blank" rel="noopener">x.com/kshot9000</a><br>
+    Pearl community:
+    <a href="https://x.com/prlnet" target="_blank" rel="noopener">x.com/prlnet</a> ·
+    <a href="https://huggingface.co/pearl-ai" target="_blank" rel="noopener">huggingface.co/pearl-ai</a> ·
+    <a href="https://www.youtube.com/@PearlResearchLabs" target="_blank" rel="noopener">YouTube @PearlResearchLabs</a> ·
+    <a href="https://pearlforums.com/" target="_blank" rel="noopener">pearlforums.com</a> ·
+    <a href="https://prlscan.com/" target="_blank" rel="noopener">prlscan.com</a><br>
+    If this work helped, a donation is appreciated:
+    <span class="addr">prl1p62v09vuzyd8kdz9l23jaf3kph4wwx6jqcmhkkhg8lhr2qlxky8psu3zw9d</span>
+  </footer>
+</div>
+
+<script>
+const API = "https://api.prlscan.com/v1";
+const SCAN = "https://prlscan.com";
+const $ = (id) => document.getElementById(id);
+const fmt = (n, d=2) => n == null ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: d });
+const hrate = (n) => {
+  if (n == null) return "—";
+  if (n >= 1e18) return fmt(n/1e18, 2) + " EH/s";
+  if (n >= 1e15) return fmt(n/1e15, 2) + " PH/s";
+  if (n >= 1e12) return fmt(n/1e12, 2) + " TH/s";
+  if (n >= 1e9)  return fmt(n/1e9,  2) + " GH/s";
+  if (n >= 1e6)  return fmt(n/1e6,  2) + " MH/s";
+  return fmt(n, 0) + " H/s";
+};
+const usd = (n) => n == null ? "—" : n >= 1e9 ? "$" + fmt(n/1e9, 2) + "B"
+  : n >= 1e6 ? "$" + fmt(n/1e6, 2) + "M" : n >= 1e3 ? "$" + fmt(n/1e3, 2) + "k" : "$" + fmt(n, 2);
+const short = (s, n=12) => s ? s.slice(0, n) + "…" + s.slice(-6) : "—";
+const ago = (t) => { if (!t) return "—"; const s = (Date.now() - new Date(t).getTime()) / 1000;
+  if (s < 90) return Math.max(0, Math.round(s)) + "s ago";
+  return Math.round(s/60) + "m ago"; };
+
+async function get(path) {
+  const r = await fetch(API + path, { headers: { Accept: "application/json" } });
+  if (!r.ok) throw new Error(path + " -> HTTP " + r.status);
+  return r.json();
+}
+
+function showErr(e) { $("err").style.display = "block"; $("err").textContent = "data error: " + e.message; }
+
+async function refresh() {
+  let status, blocks, pools, mkt;
+  try {
+    [status, blocks, pools, mkt] = await Promise.all([
+      get("/status"),
+      get("/blocks?limit=30"),
+      get("/pools"),
+      get("/market/prl"),
+    ]);
+    $("err").style.display = "none";
+
+    $("status").textContent = "mainnet · " + (status.healthy ? "healthy" : "DEGRADED");
+    $("dot").style.background = status.healthy ? "var(--up)" : "var(--down)";
+    $("mempool").textContent = fmt(status.mempool_size, 0) + " tx";
+    $("lag").textContent = status.indexer_lag + " blocks";
+
+    $("height").textContent = fmt(status.tip_height, 0);
+    $("heightsub").textContent = short(status.tip_hash) + " (indexed)";
+
+    // block time: mean interval over the fetched window
+    const items = (blocks.items || []).filter(b => b.canonical !== false);
+    const times = items.map(b => new Date(b.time).getTime()).sort((a,b) => a-b);
+    let avg = null;
+    if (times.length > 1) {
+      const span = times[times.length - 1] - times[0];
+      avg = span / (times.length - 1) / 1000;
+    }
+    $("blocktime").textContent = avg ? fmt(avg, 1) + "s" : "—";
+    $("blocktimesub").textContent = avg ? (avg * 3600 / 86400 * 24).toFixed(1) + " blocks/hr" : "";
+
+    const tip = items[0];
+    $("diff").textContent = tip ? fmt(tip.difficulty / 1e6, 1) + "M" : "—";
+    $("diffsub").textContent = tip ? "bits " + tip.bits : "";
+
+    $("blocks").innerHTML = items.slice(0, 8).map(b => `
+      <div class="block">
+        <span class="h">#${fmt(b.height, 0)}</span>
+        <span class="m">${b.tx_count} tx · ${b.size} B</span>
+        <span class="badge">${b.miner_label || "solo"}</span>
+        <a class="hash" href="${SCAN}/blocks/${b.hash}" target="_blank" rel="noopener">${short(b.hash)}</a>
+        <span class="t">${ago(b.time)}</span>
+      </div>`).join("") || "—";
+
+    const p = pools.items || [];
+    const max = Math.max(1, ...p.map(x => x.pool_share_24h || 0));
+    $("pools").innerHTML = p
+      .slice()
+      .sort((a, b) => (b.pool_share_24h || 0) - (a.pool_share_24h || 0))
+      .map((x, i) => `
+      <tr>
+        <td style="color:var(--dim)">${i + 1}</td>
+        <td class="name">${x.name}${x.website_url ? ' <a class="hash" href="' + x.website_url + '" target="_blank" rel="noopener" style="font-size:11px">↗</a>' : ""}</td>
+        <td style="text-align:right">${hrate(x.avg_hashrate_24h_hps)}</td>
+        <td style="text-align:right">${x.pool_share_24h != null ? fmt(x.pool_share_24h, 1) + "%" : "—"}</td>
+        <td style="text-align:right">${x.blocks_24h != null ? fmt(x.blocks_24h, 0) : "—"}</td>
+        <td style="text-align:right">${x.fee_label || (x.fee_percent != null ? fmt(x.fee_percent, 1) + "%" : "—")}</td>
+        <td style="text-align:right">${x.reported_workers != null ? fmt(x.reported_workers, 0) : "—"}</td>
+        <td><div class="bar"><i style="width:${(100 * (x.pool_share_24h || 0) / max).toFixed(1)}%"></i></div></td>
+      </tr>`).join("") || '<tr><td colspan="8" style="color:var(--dim)">no pool data</td></tr>';
+
+    const ch = mkt.price_change_24h_pct;
+    $("price").innerHTML = "$" + fmt(mkt.price_usd, mkt.price_usd < 1 ? 4 : 2);
+    $("pricesub").innerHTML = ch != null
+      ? `<span class="${ch >= 0 ? "up" : "down"}">${ch >= 0 ? "▲" : "▼"} ${fmt(Math.abs(ch), 2)}% · 24h</span>` : "";
+    $("mprice").textContent = "$" + fmt(mkt.price_usd, 4);
+    $("m24h").innerHTML = ch != null ? `<span class="${ch >= 0 ? "up" : "down"}">${ch >= 0 ? "+" : ""}${fmt(ch, 2)}%</span>` : "—";
+    $("vol").textContent = usd(mkt.volume_24h_usd);
+    $("otc").textContent = usd(mkt.observed_otc_volume_24h_usd);
+    $("msrc").innerHTML = mkt.source + ' <a class="hash" href="' + SCAN + '/markets" target="_blank" rel="noopener" style="font-size:11px">↗</a>';
+  } catch (e) { showErr(e); }
+  $("updated").textContent = new Date().toLocaleTimeString();
+  setTimeout(refresh, 60_000);
+}
+refresh();
+</script>
+</body>
+</html>
