@@ -1,5 +1,7 @@
 # Hermes-Pearl-24-7-Ai-Agent-Builder
 
+> Tagging the Pearl team: @pearl-research-labs
+
 A 24/7 AI-agent workflow that continuously fixes, improves, and builds upon the
 [PEARL blockchain](https://github.com/pearl-research-labs/pearl) — a
 Proof-of-AI (zkPoW) PoW chain where mining is done by AI inference.
