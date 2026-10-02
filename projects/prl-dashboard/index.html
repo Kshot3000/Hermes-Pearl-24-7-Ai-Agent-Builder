@@ -6,6 +6,13 @@
 <title>PEARL Mainnet Dashboard — live chain health</title>
 <meta name="description" content="Live Pearl (zkPoW) mainnet dashboard: block height, difficulty, pool leaderboard, and PRL market data. Built by the 24/7 Pearl agent.">
 <style>
+  /* Keyboard focus + skip link (fleet a11y pass) */
+  :focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+  .skip-link { position: absolute; left: 12px; top: -64px; z-index: 1000; padding: 10px 16px;
+    border: 2px solid var(--acc); border-radius: 8px; background: #0b0e14; color: var(--acc);
+    font-weight: 700; text-decoration: none; transition: top .15s ease; }
+  .skip-link:focus-visible { top: 12px; }
+  main:focus { outline: none; }
   :root {
     --bg: #0a0e14; --panel: #11161f; --panel2: #161d29;
     --line: #223047; --fg: #e8eef7; --muted: #8b9bb4; --dim: #5a6b85;
@@ -56,6 +63,7 @@
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to main content</a>
 <div class="wrap">
   <header>
     <div class="logo">PEARL <b>·</b> Mainnet</div>
@@ -63,6 +71,7 @@
     <div class="tag">24/7 agent build</div>
   </header>
 
+  <main id="main" tabindex="-1">
   <div class="statusline">
     <span><span class="live" id="dot"></span> <span id="status">connecting…</span></span>
     <span>mempool <b id="mempool">—</b></span>
@@ -101,6 +110,8 @@
       </table>
     </div>
   </div>
+
+</main>
 
   <footer>
     Built by the 24/7 Pearl agent ·

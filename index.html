@@ -121,6 +121,14 @@
   .copybtn:hover { border-color: var(--acc); color: var(--acc); }
   .copied { color: var(--up); font-size: 12.5px; min-height: 18px; }
 
+  /* Keyboard focus + skip link (fleet a11y pass) */
+  :focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+  .skip-link { position: absolute; left: 12px; top: -64px; z-index: 1000; padding: 10px 16px;
+    border: 2px solid var(--acc); border-radius: 8px; background: #0b0e14; color: var(--acc);
+    font-weight: 700; text-decoration: none; transition: top .15s ease; }
+  .skip-link:focus-visible { top: 12px; }
+  main:focus { outline: none; }
+
   @media (max-width: 720px) {
     .grid, .tools-grid { grid-template-columns: 1fr; }
     nav { display: none; }
@@ -129,6 +137,7 @@
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to main content</a>
 
 <header class="top">
   <div class="top-inner">
@@ -143,6 +152,7 @@
 </header>
 
 <div class="wrap">
+<main id="main" tabindex="-1">
 
   <div class="hero">
     <div class="kicker">24/7 AI-agent workflow · Pearl blockchain</div>
@@ -225,13 +235,14 @@ python tools/attribution.py --format text</pre>
   <section id="runlog">
     <h2>Upstream watch — latest release digest</h2>
     <div class="log">
-      <span class="ver">v1.4.6</span><span class="when">current, observed 2026-09-19</span>
+      <span class="ver">v1.4.11</span><span class="when">current, observed 2026-10-02</span>
       <ul>
-        <li><b>feat(consensus):</b> raise minimum peer protocol version; add checkpoints (incl. block 100,000) — #283, #288</li>
-        <li><b>fix(zkpow):</b> pin Merkle tree leaf counts to declared dimensions — #281</li>
-        <li><b>fix(rpcserver):</b> remove state-mutating methods from limited-user allowlist — #304</li>
-        <li><b>fix(txscript):</b> bound HashCache and SigCache with random eviction — #298</li>
-        <li><b>feat(coredns-dnsseed):</b> production CoreDNS seeder — #278</li>
+        <li><b>fix(wallet):</b> stop SPV sends from getting stuck as pending — #317</li>
+        <li><b>fix(wallet):</b> list and page the complete transaction history — #265</li>
+        <li><b>perf(blockchain):</b> fetch certificates with one bounded region read — #334</li>
+        <li><b>fix(v2transport):</b> accept MaxGarbageLen in BIP324 handshake — #341</li>
+        <li><b>chore(node):</b> drop pearlresearch.ai DNS seeders — #346</li>
+        <li><b>Desktop Wallet v2.0.7</b> ships on top of v1.4.11 (SPV + history fixes, dashboard history perf — #348)</li>
       </ul>
       <div class="fine">Maintained by the agent in <code>docs/releases.md</code> — every entry verified against the official release page. <a href="https://github.com/Kshot3000/Hermes-Pearl-24-7-Ai-Agent-Builder/blob/main/docs/releases.md" target="_blank" rel="noopener">Full run log →</a></div>
     </div>
@@ -256,6 +267,8 @@ python tools/attribution.py --format text</pre>
       </div>
     </div>
   </section>
+
+</main>
 
   <footer>
     Built by the 24/7 Pearl agent ·
