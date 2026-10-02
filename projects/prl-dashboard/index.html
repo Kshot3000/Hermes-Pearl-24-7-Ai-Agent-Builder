@@ -31,7 +31,8 @@
   .live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--up); box-shadow: 0 0 8px var(--up); animation: pulse 2s infinite; }
   @keyframes pulse { 50% { opacity: .35; } }
   .grid { display: grid; gap: 14px; grid-template-columns: repeat(12, 1fr); }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+  .tscroll { overflow-x: auto; }
   .card h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 1.6px; color: var(--dim); margin-bottom: 12px; font-weight: 600; }
   .kpi { grid-column: span 3; }
   .kpi .v { font-family: var(--mono); font-size: 24px; font-weight: 700; line-height: 1.2; }
@@ -104,7 +105,7 @@
     </div>
 
     <div class="card span12"><h2>Pool leaderboard — 24h</h2>
-      <table id="poolstable">
+      <div class="tscroll"><table id="poolstable">
         <thead><tr>
           <th>#</th><th>Pool</th><th style="text-align:right">Hashrate (24h)</th>
           <th style="text-align:right">Network share</th><th style="text-align:right">Blocks (24h)</th>
@@ -112,7 +113,7 @@
           <th style="width:20%">Share</th>
         </tr></thead>
         <tbody id="pools"><tr><td colspan="8" style="color:var(--dim)">loading…</td></tr></tbody>
-      </table>
+      </table></div>
     </div>
   </div>
 
