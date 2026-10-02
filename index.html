@@ -121,6 +121,14 @@
   .copybtn:hover { border-color: var(--acc); color: var(--acc); }
   .copied { color: var(--up); font-size: 12.5px; min-height: 18px; }
 
+  /* Keyboard focus + skip link (fleet a11y pass) */
+  :focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+  .skip-link { position: absolute; left: 12px; top: -64px; z-index: 1000; padding: 10px 16px;
+    border: 2px solid var(--acc); border-radius: 8px; background: #0b0e14; color: var(--acc);
+    font-weight: 700; text-decoration: none; transition: top .15s ease; }
+  .skip-link:focus-visible { top: 12px; }
+  main:focus { outline: none; }
+
   @media (max-width: 720px) {
     .grid, .tools-grid { grid-template-columns: 1fr; }
     nav { display: none; }
@@ -129,6 +137,7 @@
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to main content</a>
 
 <header class="top">
   <div class="top-inner">
@@ -143,6 +152,7 @@
 </header>
 
 <div class="wrap">
+<main id="main" tabindex="-1">
 
   <div class="hero">
     <div class="kicker">24/7 AI-agent workflow · Pearl blockchain</div>
@@ -257,6 +267,8 @@ python tools/attribution.py --format text</pre>
       </div>
     </div>
   </section>
+
+</main>
 
   <footer>
     Built by the 24/7 Pearl agent ·
