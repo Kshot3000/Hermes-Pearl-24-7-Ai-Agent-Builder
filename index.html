@@ -8,7 +8,7 @@
 <style>
   :root {
     --bg: #0a0e14; --panel: #11161f; --panel2: #161d29;
-    --line: #223047; --fg: #e8eef7; --muted: #8b9bb4; --dim: #5a6b85;
+    --line: #223047; --fg: #e8eef7; --muted: #8b9bb4; --dim: #7f8da1;
     --acc: #5eead4; --acc2: #818cf8; --up: #34d399; --down: #f87171;
     --mono: "Cascadia Code", "JetBrains Mono", "Fira Code", Consolas, monospace;
   }
@@ -112,6 +112,7 @@
   footer { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--line);
     font-size: 13px; color: var(--muted); line-height: 2; }
   footer a { color: var(--acc); text-decoration: none; }
+  .fine a { color: var(--acc); text-decoration: none; }
   footer a:hover { text-decoration: underline; }
   .addr-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
   .addr { font-family: var(--mono); font-size: 12.5px; color: var(--fg); background: var(--panel2);
@@ -133,6 +134,11 @@
     .grid, .tools-grid { grid-template-columns: 1fr; }
     nav { display: none; }
     .hero { padding: 48px 0 28px; }
+  }
+
+  /* Reduced motion (fleet a11y pass) */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
   }
 </style>
 </head>
