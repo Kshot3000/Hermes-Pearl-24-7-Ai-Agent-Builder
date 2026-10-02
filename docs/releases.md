@@ -2,7 +2,19 @@
 <!-- Maintained by the 24/7 agent. Newest first. Every entry verified against
      https://github.com/pearl-research-labs/pearl/releases -->
 
-## v1.4.6 (current, observed 2026-09-19)
+## v1.4.11 (current, observed 2026-10-02)
+- **perf(blockchain):** fetch certificates with one bounded region read — #334
+- **fix(wallet):** stop SPV sends from getting stuck as pending — #317
+- **chore(node):** drop pearlresearch.ai DNS seeders — #346
+- **fix(wallet):** list and page the complete transaction history — #265
+- **perf(desktop-wallet):** stop listing the whole history for the dashboard — #348
+- **fix(v2transport):** accept MaxGarbageLen in BIP324 handshake — #341
+
+## Desktop Wallet v2.0.7 (observed 2026-10-02, built on v1.4.11)
+- **Pearl Desktop Wallet v2.0.7** — Windows .exe / macOS .dmg (Intel+ARM) / Linux .deb
+- Ships with the v1.4.11 wallet fixes above (SPV pending sends, full paged tx history, dashboard history perf)
+
+## v1.4.6 (observed 2026-09-19)
 - **feat(consensus):** raise minimum peer protocol version; add checkpoints (incl. block 100,000) — #283, #288
 - **feat(coredns-dnsseed):** production CoreDNS seeder — #278
 - **fix(zkpow):** pin Merkle tree leaf counts to declared dimensions — #281
