@@ -36,7 +36,7 @@
   nav a:hover { color: var(--acc); }
 
   /* Hero */
-  .hero { padding: 72px 0 40px; text-align: left; position: relative; }
+  .hero { padding: 72px 0 40px; text-align: left; position: relative; overflow-x: clip; }
   .hero::before { content: ""; position: absolute; top: -40px; left: 50%; width: 560px; height: 560px;
     transform: translateX(-50%); border-radius: 50%;
     background: radial-gradient(circle, rgba(129,140,248,.10) 0%, transparent 60%);
@@ -82,7 +82,7 @@
   section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 2.4px; color: var(--dim);
     margin-bottom: 20px; font-weight: 700; }
   .grid { display: grid; gap: 16px; grid-template-columns: repeat(2, 1fr); }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; min-width: 0; }
   .card h3 { font-size: 18px; margin-bottom: 8px; }
   .card h3 a { color: var(--fg); text-decoration: none; }
   .card h3 a:hover { color: var(--acc); }
