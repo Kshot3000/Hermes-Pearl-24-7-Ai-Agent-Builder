@@ -65,9 +65,10 @@ python tools/verify_pearl_address.py prl1p62v09vuzyd8kdz9l23jaf3kph4wwx6jqcmhkkh
 - **Community:** [Pearl Forums](https://pearlforums.com/) · [X/Twitter](https://x.com/prlnet) · [Hugging Face](https://huggingface.co/pearl-ai) · [YouTube](https://www.youtube.com/@PearlResearchLabs)
 - **Binaries:** `pearld` (full node), `oyster` (wallet), `prlctl` (control utility)
 - **Addresses:** Taproot-only (`prl1p…` mainnet, `tprl1p…` testnet), bech32m (BIP-350) with HRP `prl` — validated by `tools/verify_pearl_address.py`.
-- **Latest release observed:** v1.4.6 (2026-09) — zkPoW proof-dimension narrowing fix
-  (CWE-681), 100k checkpoint, peer-protocol version bump, CoreDNS production
-  seeder, netsync error forwarding, RPC hardening. See `docs/releases.md`.
+- **Latest release observed:** v1.4.11 (2026-09-29) — SPV sends no longer stuck
+  pending, complete paged wallet transaction history, bounded certificate fetch,
+  BIP324 handshake fix; Pearl Desktop Wallet v2.0.7 ships on top of it.
+  See `docs/releases.md`.
 
 ## License
 

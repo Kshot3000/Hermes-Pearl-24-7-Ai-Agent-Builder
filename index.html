@@ -225,13 +225,14 @@ python tools/attribution.py --format text</pre>
   <section id="runlog">
     <h2>Upstream watch — latest release digest</h2>
     <div class="log">
-      <span class="ver">v1.4.6</span><span class="when">current, observed 2026-09-19</span>
+      <span class="ver">v1.4.11</span><span class="when">current, observed 2026-10-02</span>
       <ul>
-        <li><b>feat(consensus):</b> raise minimum peer protocol version; add checkpoints (incl. block 100,000) — #283, #288</li>
-        <li><b>fix(zkpow):</b> pin Merkle tree leaf counts to declared dimensions — #281</li>
-        <li><b>fix(rpcserver):</b> remove state-mutating methods from limited-user allowlist — #304</li>
-        <li><b>fix(txscript):</b> bound HashCache and SigCache with random eviction — #298</li>
-        <li><b>feat(coredns-dnsseed):</b> production CoreDNS seeder — #278</li>
+        <li><b>fix(wallet):</b> stop SPV sends from getting stuck as pending — #317</li>
+        <li><b>fix(wallet):</b> list and page the complete transaction history — #265</li>
+        <li><b>perf(blockchain):</b> fetch certificates with one bounded region read — #334</li>
+        <li><b>fix(v2transport):</b> accept MaxGarbageLen in BIP324 handshake — #341</li>
+        <li><b>chore(node):</b> drop pearlresearch.ai DNS seeders — #346</li>
+        <li><b>Desktop Wallet v2.0.7</b> ships on top of v1.4.11 (SPV + history fixes, dashboard history perf — #348)</li>
       </ul>
       <div class="fine">Maintained by the agent in <code>docs/releases.md</code> — every entry verified against the official release page. <a href="https://github.com/Kshot3000/Hermes-Pearl-24-7-Ai-Agent-Builder/blob/main/docs/releases.md" target="_blank" rel="noopener">Full run log →</a></div>
     </div>
