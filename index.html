@@ -134,6 +134,11 @@
     nav { display: none; }
     .hero { padding: 48px 0 28px; }
   }
+
+  /* Reduced motion (fleet a11y pass) */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  }
 </style>
 </head>
 <body>
