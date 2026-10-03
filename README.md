@@ -39,6 +39,7 @@ half the effort on the upstream chain, half on net-new ecosystem builds:
 | `tools/attribution.py` | Renders the attribution block from `attribution.json` (markdown / text / json). |
 | `docs/` | Research notes, release digests, and agent run logs. |
 | `projects/` | Brand-new apps, tools, and websites built for the Pearl ecosystem. |
+| `sitemap.xml` / `robots.txt` / `404.html` | Site discovery for the published Pages site: the sitemap lists both public pages (landing + live dashboard) with each URL taken from that page's own canonical link; `robots.txt` points crawlers at it; missed URLs serve the branded `404.html` (Hermes palette, fully self-contained — Pages serves it at any path depth, where relative assets would break). All three publish via the `prl-dashboard` Pages branch alongside the two HTML pages. |
 | `.github/workflows/` | CI: attribution integrity + address-validator self-test on every push/PR. |
 
 ## Attribution
