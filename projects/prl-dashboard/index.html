@@ -151,6 +151,13 @@
 const API = "https://api.prlscan.com/v1";
 const SCAN = "https://prlscan.com";
 const $ = (id) => document.getElementById(id);
+/* Every string below comes from the third-party prlscan API and is rendered
+   via innerHTML, so all of it is escaped first (fleet esc() standard), pool
+   website links additionally pass an http(s)-only URL check, and block
+   hashes are URL-encoded into the explorer path. A hostile or compromised
+   API response must render as inert text, never markup. */
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const safeUrl = (u) => { try { const p = new URL(String(u)); return (p.protocol === "https:" || p.protocol === "http:") ? p.href : null; } catch { return null; } };
 const fmt = (n, d=2) => n == null ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: d });
 const hrate = (n) => {
   if (n == null) return "—";
@@ -213,9 +220,9 @@ async function refresh() {
     $("blocks").innerHTML = items.slice(0, 8).map(b => `
       <div class="block">
         <span class="h">#${fmt(b.height, 0)}</span>
-        <span class="m">${b.tx_count} tx · ${b.size} B</span>
-        <span class="badge">${b.miner_label || "solo"}</span>
-        <a class="hash" href="${SCAN}/blocks/${b.hash}" target="_blank" rel="noopener">${short(b.hash)}</a>
+        <span class="m">${esc(b.tx_count)} tx · ${esc(b.size)} B</span>
+        <span class="badge">${esc(b.miner_label || "solo")}</span>
+        <a class="hash" href="${SCAN}/blocks/${encodeURIComponent(b.hash || "")}" target="_blank" rel="noopener">${esc(short(b.hash))}</a>
         <span class="t">${ago(b.time)}</span>
       </div>`).join("") || "—";
 
@@ -224,17 +231,17 @@ async function refresh() {
     $("pools").innerHTML = p
       .slice()
       .sort((a, b) => (b.pool_share_24h || 0) - (a.pool_share_24h || 0))
-      .map((x, i) => `
+      .map((x, i) => { const url = x.website_url ? safeUrl(x.website_url) : null; return `
       <tr>
         <td style="color:var(--dim)">${i + 1}</td>
-        <td class="name">${x.name}${x.website_url ? ' <a class="hash" href="' + x.website_url + '" target="_blank" rel="noopener" style="font-size:11px">↗</a>' : ""}</td>
+        <td class="name">${esc(x.name)}${url ? ' <a class="hash" href="' + esc(url) + '" target="_blank" rel="noopener" style="font-size:11px">↗</a>' : ""}</td>
         <td style="text-align:right">${hrate(x.avg_hashrate_24h_hps)}</td>
         <td style="text-align:right">${x.pool_share_24h != null ? fmt(x.pool_share_24h, 1) + "%" : "—"}</td>
         <td style="text-align:right">${x.blocks_24h != null ? fmt(x.blocks_24h, 0) : "—"}</td>
-        <td style="text-align:right">${x.fee_label || (x.fee_percent != null ? fmt(x.fee_percent, 1) + "%" : "—")}</td>
+        <td style="text-align:right">${esc(x.fee_label || (x.fee_percent != null ? fmt(x.fee_percent, 1) + "%" : "—"))}</td>
         <td style="text-align:right">${x.reported_workers != null ? fmt(x.reported_workers, 0) : "—"}</td>
         <td><div class="bar"><i style="width:${(100 * (x.pool_share_24h || 0) / max).toFixed(1)}%"></i></div></td>
-      </tr>`).join("") || '<tr><td colspan="8" style="color:var(--dim)">no pool data</td></tr>';
+      </tr>`; }).join("") || '<tr><td colspan="8" style="color:var(--dim)">no pool data</td></tr>';
 
     const ch = mkt.price_change_24h_pct;
     $("price").innerHTML = "$" + fmt(mkt.price_usd, mkt.price_usd < 1 ? 4 : 2);
@@ -244,7 +251,7 @@ async function refresh() {
     $("m24h").innerHTML = ch != null ? `<span class="${ch >= 0 ? "up" : "down"}">${ch >= 0 ? "+" : ""}${fmt(ch, 2)}%</span>` : "—";
     $("vol").textContent = usd(mkt.volume_24h_usd);
     $("otc").textContent = usd(mkt.observed_otc_volume_24h_usd);
-    $("msrc").innerHTML = mkt.source + ' <a class="hash" href="' + SCAN + '/markets" target="_blank" rel="noopener" style="font-size:11px">↗</a>';
+    $("msrc").innerHTML = esc(mkt.source) + ' <a class="hash" href="' + SCAN + '/markets" target="_blank" rel="noopener" style="font-size:11px">↗</a>';
   } catch (e) { showErr(e); }
   $("updated").textContent = new Date().toLocaleTimeString();
   setTimeout(refresh, 60_000);

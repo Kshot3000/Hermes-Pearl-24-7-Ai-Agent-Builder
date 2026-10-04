@@ -21,6 +21,10 @@ Auto-refreshes every 60 seconds. No build step, no framework, no API keys.
 All data comes from the public prlscan API (`https://api.prlscan.com/v1/...`) —
 endpoints used: `/status`, `/blocks?limit=30`, `/pools`, `/market/prl`.
 CORS reflects the requesting origin, so the static page fetches directly.
+Every API-supplied string is HTML-escaped before it reaches `innerHTML`,
+pool website links must pass an http(s)-only URL check, and block hashes
+are URL-encoded into explorer links — a hostile or compromised API response
+renders as inert text, never markup.
 Grain→PRL conversion uses `GrainPerPearl = 1e8` from the Pearl node
 (`node/btcutil/const.go`).
 
