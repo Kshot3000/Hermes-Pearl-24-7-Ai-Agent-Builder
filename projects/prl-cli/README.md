@@ -6,20 +6,27 @@ no dependencies — part of the 24/7 Pearl agent's **Build-half** roadmap.
 ## Quick start
 
 ```bash
-# Against a local node (default: http://127.0.0.1:8401, creds prl/prl)
+# Against a local node (default: http://127.0.0.1:44107 mainnet;
+# --testnet switches the default port to 44109). pearld only serves RPC
+# when rpcuser/rpcpass are configured — pass them if your node requires them.
 python prl status
-python prl block 115000
+python prl block 115000        # by height (resolved via getblockhash)
+python prl block latest        # chain tip (via getbestblockhash)
+python prl block <blockhash>   # by hash
 python prl tx <txid>
-python prl mempool
+python prl mempool --limit 10
 
 # Against any node / socket / creds
-python prl --rpc-url http://127.0.0.1:8401 --user U --pass P status
+python prl --rpc-url http://10.0.0.5:44107 --user U --pass P status
 python prl --socket /var/run/pearld.sock block latest
 python prl check prl1p62v09vuzyd8kdz9l23jaf3kph4wwx6jqcmhkkhg8lhr2qlxky8psu3zw9d
 
-# Raw passthrough to any RPC method
-python prl -j getblockchaininfo
-python prl estimatefee
+# Raw passthrough to any RPC method (args are JSON-parsed when possible)
+python prl raw getblockchaininfo
+python prl raw getblockhash 115000
+
+# Machine-readable output from the built-in commands
+python prl --json status
 ```
 
 Environment overrides: `PRL_RPC_URL`, `PRL_RPC_SOCKET`, `PRL_RPC_USER`,
@@ -27,19 +34,23 @@ Environment overrides: `PRL_RPC_URL`, `PRL_RPC_SOCKET`, `PRL_RPC_USER`,
 
 ## Features
 
-- `status` — chain tip, difficulty, median time, sync state
-- `block [height|hash|latest]` — decoded block + tx count
-- `tx <txid>` — inputs/outputs with **decoded Pearl addresses**
-- `mempool` — pending tx count + total fees
+- `status` — chain, tip height/hash, difficulty, median time, mempool size
+- `block [height|hash|latest]` — decoded block + tx count (heights are
+  resolved through `getblockhash`; `pearld`'s `getblock` takes a hash only)
+- `tx <txid>` — inputs/outputs with the node's decoded addresses
+- `mempool` — pending tx count + txid list (`--limit`, default 20)
 - `check <addr>...` — offline bech32m Taproot address validation (mainnet/testnet)
-- `<method> [args...]` — raw passthrough to any RPC method, JSON in/out
-- `--json` on any command for machine-readable output
+- `raw <method> [args...]` — passthrough to any RPC method, JSON in/out
+- `--json` on the built-in commands for machine-readable output
 
 ## Tests
 
 ```bash
-python tests/test_prl_cli.py   # 16 tests, stdlib-only, mock node in-process
+python tests/test_prl_cli.py   # 18 tests, stdlib-only, mock node in-process
 ```
+
+The mock node models a real `pearld`'s type rules (e.g. `getblock` rejects a
+numeric height), so argument-shape bugs fail the suite instead of passing it.
 
 ## Built for the Pearl community
 

@@ -82,15 +82,27 @@ def make_handler():
             if method in RESPONSES:
                 result = RESPONSES[method]
             elif method == "getblock":
+                # Model a real pearld: getblock's first param is a hash
+                # STRING (upstream rpcserverhelp: (*string)(nil)) — a
+                # numeric height fails btcjson unmarshalling there.
                 ref = params[0]
-                if ref in (115681, "a" * 64):
+                if not isinstance(ref, str):
+                    self._reply(-1, "Invalid type provided. Expected string for getblock block hash")
+                    return
+                if ref == "a" * 64:
                     result = FAKE_BLOCK
                 else:
-                    self._reply(1, "Block not found")
+                    self._reply(-5, "Block not found")
                     return
             elif method == "getrawtransaction":
                 result = FAKE_TX
             elif method == "getblockhash":
+                if params[0] in (0, 115681):
+                    result = "a" * 64
+                else:
+                    self._reply(-8, "Block height out of range")
+                    return
+            elif method == "getbestblockhash":
                 result = "a" * 64
             else:
                 self._reply(-32601, f"Method not found: {method}")
@@ -162,10 +174,17 @@ def make_sock_server(path):
                     body += chunk
                 msg = json.loads(body[:n] or b"{}")
                 method = msg.get("method")
+                params = msg.get("params", [])
                 if method in RESPONSES:
                     out = json.dumps({"jsonrpc": "2.0", "id": 1,
                                       "result": RESPONSES[method]}).encode()
-                elif method == "getblock":
+                elif method == "getblockhash" and params and params[0] in (0, 115681):
+                    out = json.dumps({"jsonrpc": "2.0", "id": 1,
+                                      "result": "a" * 64}).encode()
+                elif method == "getbestblockhash":
+                    out = json.dumps({"jsonrpc": "2.0", "id": 1,
+                                      "result": "a" * 64}).encode()
+                elif method == "getblock" and params and isinstance(params[0], str):
                     out = json.dumps({"jsonrpc": "2.0", "id": 1,
                                       "result": FAKE_BLOCK}).encode()
                 else:
@@ -257,10 +276,23 @@ class TestPrlCli(unittest.TestCase):
         self.assertIn("height     115681", r.stdout)
 
     def test_block_missing(self):
+        # Height 42 resolves through getblockhash first; the node refuses it.
         r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",
                     "block", 42)
         self.assertEqual(r.returncode, 1)
+        self.assertIn("Block height out of range", r.stderr)
+
+    def test_block_unknown_hash(self):
+        r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",
+                    "block", "f" * 64)
+        self.assertEqual(r.returncode, 1)
         self.assertIn("Block not found", r.stderr)
+
+    def test_block_latest(self):
+        r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",
+                    "block", "latest")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("height     115681", r.stdout)
 
     def test_tx(self):
         r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",

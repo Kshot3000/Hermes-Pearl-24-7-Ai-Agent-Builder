@@ -8,6 +8,7 @@ no dependencies. Speaks the standard btcd-style JSON-RPC that pearld exposes
 Examples:
   prl status
   prl block 115681
+  prl block latest
   prl tx <hash>
   prl mempool --limit 10
   prl check prl1...          # validate a Pearl address (uses repo validator)
@@ -28,7 +29,7 @@ import socket
 import sys
 import textwrap
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 # --- address validation: prefer this repo's stdlib-only validator -----------
 def _load_validator():
@@ -150,8 +151,18 @@ def _is_height(s):
 
 
 def cmd_block(c, args):
-    ref = int(args.ref) if args.ref and args.ref.isdigit() else (args.ref or 0)
-    res = c.call("getblock", ref, 1)  # verbose=1 -> decoded object
+    # pearld's getblock takes a block HASH (string) — a height must first be
+    # resolved through getblockhash, exactly like the fleet explorer does.
+    # (Pre-0.1.1 the height was passed to getblock verbatim, which a real
+    # node rejects: btcjson cannot unmarshal a number into the string param.)
+    ref = args.ref
+    if ref is None or ref == "latest":
+        block_hash = c.call("getbestblockhash") if ref == "latest" else c.call("getblockhash", 0)
+    elif ref.isdigit():
+        block_hash = c.call("getblockhash", int(ref))
+    else:
+        block_hash = ref
+    res = c.call("getblock", block_hash, 1)  # verbose=1 -> decoded object
     if args.json:
         print(json.dumps(res, indent=2))
         return
@@ -263,7 +274,7 @@ def main(argv=None):
 
     sub.add_parser("status", help="blockchain + mempool summary")
     pb = sub.add_parser("block", help="get block by height or hash")
-    pb.add_argument("ref", nargs="?", help="block height (number) or hash")
+    pb.add_argument("ref", nargs="?", help="block height (number), hash, or 'latest' (default: genesis)")
     pm = sub.add_parser("mempool", help="list mempool txs")
     pm.add_argument("--limit", type=int, default=20)
     pt = sub.add_parser("tx", help="get transaction by hash (decoded)")
