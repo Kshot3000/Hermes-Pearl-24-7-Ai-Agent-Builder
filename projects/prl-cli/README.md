@@ -39,14 +39,16 @@ Environment overrides: `PRL_RPC_URL`, `PRL_RPC_SOCKET`, `PRL_RPC_USER`,
   resolved through `getblockhash`; `pearld`'s `getblock` takes a hash only)
 - `tx <txid>` — inputs/outputs with the node's decoded addresses
 - `mempool` — pending tx count + txid list (`--limit`, default 20)
-- `check <addr>...` — offline bech32m Taproot address validation (mainnet/testnet)
+- `check <addr>...` — offline strict Pearl address validation (mainnet/testnet):
+  Taproot-only witness v1, 32-byte program, bech32m checksum, zero padding —
+  a valid-checksum v0, short-program, or foreign-chain address is INVALID
 - `raw <method> [args...]` — passthrough to any RPC method, JSON in/out
 - `--json` on the built-in commands for machine-readable output
 
 ## Tests
 
 ```bash
-python tests/test_prl_cli.py   # 18 tests, stdlib-only, mock node in-process
+python tests/test_prl_cli.py   # 20 tests, stdlib-only, mock node in-process
 ```
 
 The mock node models a real `pearld`'s type rules (e.g. `getblock` rejects a

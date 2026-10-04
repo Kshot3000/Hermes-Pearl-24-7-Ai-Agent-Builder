@@ -46,12 +46,33 @@ def _hrp_expand(hrp):
     ]
 
 
+def _checksum_const(hrp, data):
+    """Return the checksum constant the string actually uses, or None.
+
+    BIP-350: witness v0 uses bech32 (const 1), v1+ uses bech32m. A bare
+    "checksum valid" boolean hides which encoding was used, and the two are
+    NOT interchangeable — upstream's decodeSegWitAddress rejects a v1
+    address carrying a bech32 checksum (and vice versa).
+    """
+    polymod = _polymod(_hrp_expand(hrp) + data)
+    if polymod == BECH32M_CONST:
+        return BECH32M_CONST
+    if polymod == BECH32_CONST:
+        return BECH32_CONST
+    return None
+
+
 def _verify_checksum(hrp, data):
-    return _polymod(_hrp_expand(hrp) + data) in (BECH32M_CONST, BECH32_CONST)
+    return _checksum_const(hrp, data) is not None
 
 
-def decode(address):
-    """Decode a bech32m address -> (hrp, witness_version, program_bytes) or None."""
+def _decode_full(address):
+    """Decode -> (hrp, witness_version, program_bytes, checksum_const) or None.
+
+    Generic BIP-173/350 layer: any HRP and witness version decode here.
+    Pearl strictness (HRP, Taproot-only, 32-byte program, bech32m) lives in
+    verify(), not here — the test suite pins this layer to the BIP vectors.
+    """
     if not isinstance(address, str):
         return None
     addr = address.lower()
@@ -72,7 +93,8 @@ def decode(address):
         if idx < 0:
             return None
         data.append(idx)
-    if not _verify_checksum(hrp, data):
+    const = _checksum_const(hrp, data)
+    if const is None:
         return None
     # Strip the 6-char checksum; first symbol is the witness version.
     payload = data[:-6]
@@ -81,7 +103,7 @@ def decode(address):
     version_char = CHARSET[payload[0]]
     if version_char not in WITNESS_VERSIONS:
         return None
-    # Expand remaining 5-bit groups into bytes.
+    # Expand remaining 5-bit groups into bytes (convertbits, pad=False).
     bits = 0
     acc = 0
     out = bytearray()
@@ -91,21 +113,36 @@ def decode(address):
         if bits >= 8:
             out.append((acc >> (bits - 8)) & 0xFF)
             bits -= 8
-    if bits >= 5:  # leftover bits must be zero
+    if bits >= 5:  # more leftover than one partial group: invalid length
         return None
-    return hrp, WITNESS_VERSIONS[version_char], bytes(out)
+    if bits and acc & ((1 << bits) - 1):
+        # Leftover bits are padding and must be zero (BIP-173). Accepting
+        # non-zero padding makes the encoding malleable: two different
+        # strings would decode to the same program.
+        return None
+    return hrp, WITNESS_VERSIONS[version_char], bytes(out), const
+
+
+def decode(address):
+    """Decode a bech32/bech32m address -> (hrp, witness_version, program) or None."""
+    dec = _decode_full(address)
+    return dec[:3] if dec is not None else None
 
 
 def verify(address, hrp="prl"):
-    """Return (bool, reason)."""
-    dec = decode(address)
+    """Return (bool, reason). Strict Pearl rules: Taproot-only, 32-byte
+    program, bech32m encoding (BIP-350 requires bech32m for witness v1+;
+    a bech32-checksummed v1 string is a different, invalid encoding)."""
+    dec = _decode_full(address)
     if dec is None:
         return False, "not a valid bech32m string (bad checksum or encoding)"
-    a_hrp, version, program = dec
+    a_hrp, version, program, const = dec
     if a_hrp != hrp:
         return False, f"HRP '{a_hrp}' != expected '{hrp}' (testnet uses 'tprl')"
     if version != 1:
         return False, f"witness version {version} != 1 (Pearl is Taproot-only)"
+    if const != BECH32M_CONST:
+        return False, "witness v1 must use bech32m (BIP-350), not bech32"
     if len(program) != 32:
         return False, f"program length {len(program)} != 32 bytes"
     return True, "valid"

@@ -28,6 +28,23 @@ KNOWN_BAD = [
     "prl1p62v09VUZYD8K",  # mixed case
 ]
 
+# Valid-checksum strings that are still NOT valid Pearl addresses.
+# Each was generated from the donation address's real program; verify()
+# must reject every one (a bare checksum pass is not Pearl validity).
+STRICT_BAD = [
+    # witness v0 with a valid bech32 checksum — Pearl is Taproot-only and
+    # upstream decodeSegWitAddress rejects v0 outright.
+    "prl1q62v09vuzyd8kdz9l23jaf3kph4wwx6jqcmhkkhg8lhr2qlxky8pskxz8a3",
+    # witness v1, bech32m, but a 20-byte program — Pearl requires 32.
+    "prl1p62v09vuzyd8kdz9l23jaf3kph4wwx6jqmu48ck",
+    # witness v1, 32-byte program, but checksummed with the bech32 (v0)
+    # constant — BIP-350 requires bech32m for v1+.
+    "prl1p62v09vuzyd8kdz9l23jaf3kph4wwx6jqcmhkkhg8lhr2qlxky8psfdjzq0",
+    # Donation address with a padding bit flipped: same program, different
+    # string. Non-zero padding is malleability — BIP-173 forbids it.
+    "prl1p62v09vuzyd8kdz9l23jaf3kph4wwx6jqcmhkkhg8lhr2qlxky8p3p8kmcl",
+]
+
 # BIP-173/350 decode vectors (hrp-agnostic decode()).
 BIP_VECTORS_OK = {
     "BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4": ("bc", 0),
@@ -57,6 +74,17 @@ class TestPearlAddressValidator(unittest.TestCase):
         for addr in KNOWN_BAD:
             ok, _msg = verify(addr)
             self.assertFalse(ok, f"expected invalid: {addr}")
+
+    def test_strict_bad_addresses(self):
+        for addr in STRICT_BAD:
+            ok, _msg = verify(addr)
+            self.assertFalse(ok, f"expected invalid: {addr}")
+
+    def test_decode_rejects_nonzero_padding(self):
+        # The padding-flipped string must not decode at all (malleability),
+        # while the untouched donation address still decodes to 32 bytes.
+        self.assertIsNone(decode(STRICT_BAD[3]))
+        self.assertEqual(len(decode(DONATION)[2]), 32)
 
     def test_bip_vectors_decode(self):
         for addr, (hrp, version) in BIP_VECTORS_OK.items():

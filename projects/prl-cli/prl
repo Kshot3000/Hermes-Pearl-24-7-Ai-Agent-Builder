@@ -29,7 +29,7 @@ import socket
 import sys
 import textwrap
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 
 # --- address validation: prefer this repo's stdlib-only validator -----------
 def _load_validator():
@@ -219,16 +219,28 @@ def cmd_check(c, args):
             print(f"{addr}  (validator module not found — skipped)")
             rc = 2
             continue
-        try:
-            dec = vpa.decode(addr)
-        except Exception:
-            dec = None
+        # Strict Pearl validation via the validator's verify() — NOT the
+        # generic BIP decode(). decode() happily decodes witness-v0, a
+        # 20-byte program, or a foreign HRP (e.g. a Bitcoin bc1q address),
+        # and this command used to print OK + rc 0 for all three, even
+        # though verify() (and pearld itself) reject every one of them.
+        dec = vpa.decode(addr)
         if dec is None:
-            print(f"INVALID  {addr}")
+            print(f"INVALID  {addr}  (not a valid bech32/bech32m string)")
+            rc = 2
+            continue
+        hrp = dec[0]
+        if hrp not in ("prl", "tprl"):
+            print(f"INVALID  {addr}  (HRP '{hrp}' is not a Pearl network)")
+            rc = 2
+            continue
+        ok, reason = vpa.verify(addr, hrp=hrp)
+        if not ok:
+            print(f"INVALID  {addr}  ({reason})")
             rc = 2
         else:
-            hrp, witver, program = dec
-            tag = "mainnet" if hrp == "prl" else ("testnet" if hrp == "tprl" else hrp)
+            _, witver, program = dec
+            tag = "mainnet" if hrp == "prl" else "testnet"
             print(f"OK       {addr}  ({tag}, witness v{witver}, {len(program)} bytes)")
     return rc
 

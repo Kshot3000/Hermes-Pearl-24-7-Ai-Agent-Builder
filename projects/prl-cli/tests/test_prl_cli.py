@@ -356,6 +356,28 @@ class TestPrlCli(unittest.TestCase):
         r = run_prl("check", DONATION_ADDR[:-1].lower() + DONATION_ADDR[-1].upper())
         self.assertEqual(r.returncode, 2)
 
+    def test_check_rejects_non_pearl(self):
+        # Valid-checksum strings that are NOT Pearl addresses. `check` used
+        # the generic BIP decode() as its oracle and printed OK + rc 0 for
+        # all of these; the strict validator rejects every one.
+        for addr in (
+            "prl1q62v09vuzyd8kdz9l23jaf3kph4wwx6jqcmhkkhg8lhr2qlxky8pskxz8a3",  # witness v0
+            "prl1p62v09vuzyd8kdz9l23jaf3kph4wwx6jqmu48ck",  # 20-byte program
+            "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",  # Bitcoin address
+            "prl1p62v09vuzyd8kdz9l23jaf3kph4wwx6jqcmhkkhg8lhr2qlxky8psfdjzq0",  # bech32 checksum on v1
+        ):
+            r = run_prl("check", addr)
+            self.assertEqual(r.returncode, 2, addr)
+            self.assertIn("INVALID", r.stdout, addr)
+
+    def test_check_testnet(self):
+        # Same program as the donation address under the testnet HRP.
+        r = run_prl("check",
+                    "tprl1p62v09vuzyd8kdz9l23jaf3kph4wwx6jqcmhkkhg8lhr2qlxky8psh7xs6c")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("OK", r.stdout)
+        self.assertIn("testnet", r.stdout)
+
 
 def make_server(port):
     """ThreadingHTTPServer requiring Basic auth prl/prl."""
