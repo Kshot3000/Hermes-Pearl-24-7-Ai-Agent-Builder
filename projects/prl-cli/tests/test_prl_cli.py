@@ -21,36 +21,46 @@ PY = sys.executable
 DONATION_ADDR = "prl1p62v09vuzyd8kdz9l23jaf3kph4wwx6jqcmhkkhg8lhr2qlxky8psu3zw9d"
 
 FAKE_BLOCK = {
+    # pearld-shaped GetBlockVerboseResult: no `nonce` field exists upstream
+    # (PoUW header) — confirmations + proofcommitment are the real fields.
     "height": 115681, "hash": "a" * 64, "previousblockhash": "b" * 64,
-    "version": 2, "versionbit": 2, "merkleroot": "c" * 64,
-    "time": 1768848000, "mediantime": 1768847900, "nonce": 42,
+    "confirmations": 10, "proofcommitment": "0" * 64,
+    "version": 2, "versionHex": "00000002", "merkleroot": "c" * 64,
+    "time": 1768848000, "mediantime": 1768847900,
     "bits": "207fffff", "difficulty": 4398046511104.0,
     "chainwork": "0000" + "1" * 40, "transactions": 1, "size": 58740,
     "weight": 234960, "strippedsize": 200, "tx": [
         {"txid": "d" * 64, "hash": "d" * 64, "size": 100, "vin": [
-            {"prevout": {"txid": "e" * 64, "vout": 0}, "scriptSig": {
+            {"txid": "e" * 64, "vout": 0, "scriptSig": {
                 "asm": "", "hex": ""}, "sequence": 4294967295}],
          "vout": [{"value": 1.23456789, "n": 0,
-                   "scriptpubkey": {"asm": "OP_1 " + "f" * 64,
+                   "scriptPubKey": {"asm": "OP_1 " + "f" * 64,
                                     "hex": "5120" + "f" * 64,
                                     "address": DONATION_ADDR,
                                     "type": "witness_v1_taproot"}}]},
     ],
 }
 
+# pearld-shaped verbose getrawtransaction result (upstream btcjson
+# TxRawResult + Vin/Vout): the spent outpoint is INLINE on each vin
+# (txid/vout, or `coinbase` for a coinbase input) — no Core-style
+# `prevout` object — and the output key is `scriptPubKey` (capital P/K).
 FAKE_TX = {
     "txid": "d" * 64, "hash": "d" * 64, "version": 2,
     "locktime": 0, "size": 100, "vin": [
-        {"prevout": {"txid": "e" * 64, "vout": 0}, "scriptSig": {
+        {"txid": "e" * 64, "vout": 0, "scriptSig": {
             "asm": "", "hex": ""}, "sequence": 4294967295}],
     "vout": [{"value": 1.23456789, "n": 0,
-              "scriptpubkey": {"asm": "OP_1 " + "f" * 64,
+              "scriptPubKey": {"asm": "OP_1 " + "f" * 64,
                                "hex": "5120" + "f" * 64,
                                "address": DONATION_ADDR,
                                "type": "witness_v1_taproot"}}],
     "blockhash": "a" * 64, "confirmations": 10, "time": 1768848000,
     "blocktime": 1768848000,
 }
+
+FAKE_COINBASE_TX = dict(FAKE_TX, txid="c" * 64, vin=[
+    {"coinbase": "03aabbcc", "txinwitness": [], "sequence": 4294967295}])
 
 RESPONSES = {
     "getblockchaininfo": {"chain": "main", "blocks": 115681,
@@ -95,7 +105,7 @@ def make_handler():
                     self._reply(-5, "Block not found")
                     return
             elif method == "getrawtransaction":
-                result = FAKE_TX
+                result = FAKE_COINBASE_TX if params[0] == "c" * 64 else FAKE_TX
             elif method == "getblockhash":
                 if params[0] in (0, 115681):
                     result = "a" * 64
@@ -268,6 +278,11 @@ class TestPrlCli(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("height     115681", r.stdout)
         self.assertIn("txs        1", r.stdout)
+        # Regression (0.1.3): GetBlockVerboseResult has no `nonce` field —
+        # the old line printed "nonce None" against every real node.
+        self.assertIn("confirms   10", r.stdout)
+        self.assertIn("proof      " + "0" * 64, r.stdout)
+        self.assertNotIn("None", r.stdout)
 
     def test_block_by_hash(self):
         r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",
@@ -301,6 +316,19 @@ class TestPrlCli(unittest.TestCase):
         self.assertIn("1.23456789", r.stdout)
         self.assertIn(DONATION_ADDR, r.stdout)
         self.assertIn("5120", r.stdout)
+        # Regression (0.1.3): against the real pearld shape the input line
+        # must show the inline spent outpoint — the old prevout lookup
+        # printed "None:None" and the lowercase scriptpubkey lookup
+        # printed "scriptPubKey None" with no address.
+        self.assertIn("in0   " + "e" * 64 + ":0", r.stdout)
+        self.assertNotIn("None", r.stdout)
+
+    def test_tx_coinbase(self):
+        r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",
+                    "tx", "c" * 64)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("in0   coinbase", r.stdout)
+        self.assertNotIn("None", r.stdout)
 
     def test_mempool(self):
         r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",

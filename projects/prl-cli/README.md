@@ -48,11 +48,13 @@ Environment overrides: `PRL_RPC_URL`, `PRL_RPC_SOCKET`, `PRL_RPC_USER`,
 ## Tests
 
 ```bash
-python tests/test_prl_cli.py   # 20 tests, stdlib-only, mock node in-process
+python tests/test_prl_cli.py   # 21 tests, stdlib-only, mock node in-process
 ```
 
-The mock node models a real `pearld`'s type rules (e.g. `getblock` rejects a
-numeric height), so argument-shape bugs fail the suite instead of passing it.
+The mock node models a real `pearld`'s wire rules (e.g. `getblock` rejects a
+numeric height; `getrawtransaction` returns the btcjson `Vin`/`Vout` shapes —
+inline `txid`/`vout` or `coinbase` on inputs, `scriptPubKey` on outputs), so
+argument- and response-shape bugs fail the suite instead of passing it.
 
 ## Built for the Pearl community
 

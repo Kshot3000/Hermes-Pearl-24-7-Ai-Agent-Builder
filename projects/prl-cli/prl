@@ -29,7 +29,7 @@ import socket
 import sys
 import textwrap
 
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 
 # --- address validation: prefer this repo's stdlib-only validator -----------
 def _load_validator():
@@ -169,13 +169,17 @@ def cmd_block(c, args):
     print(f"height     {res.get('height')}")
     print(f"hash       {res.get('hash')}")
     print(f"previous   {res.get('previousblockhash')}")
-    print(f"nonce      {res.get('nonce')}")
+    # pearld's GetBlockVerboseResult has NO `nonce` field (Pearl's PoUW
+    # header carries a proof commitment instead) — pre-0.1.3 this printed
+    # "nonce None" against every real node.
+    print(f"confirms   {res.get('confirmations')}")
     print(f"version    {res.get('version')}")
     print(f"bits       {res.get('bits')}")
     print(f"time       {res.get('time')}")
     print(f"difficulty {res.get('difficulty')}")
     print(f"txs        {len(res.get('tx', []))}")
     print(f"merkle     {res.get('merkleroot')}")
+    print(f"proof      {res.get('proofcommitment')}")
 
 
 def cmd_tx(c, args):
@@ -188,10 +192,20 @@ def cmd_tx(c, args):
     print(f"locktime   {res.get('locktime')}")
     print(f"size       {res.get('size')} bytes")
     for i, v in enumerate(res.get("vin", [])):
-        prev = v.get("prevout", {})
-        print(f"  in{i}   {prev.get('txid')}:{prev.get('vout')}")
+        # pearld (btcjson Vin, node/btcjson/chainsvrresults.go) carries the
+        # spent outpoint INLINE as txid/vout — there is no Core-style
+        # `prevout` object in getrawtransaction output (that shape exists
+        # only in searchrawtransactions with vinExtra). A coinbase input
+        # carries `coinbase` instead of a txid. (Pre-0.1.3 this read
+        # v["prevout"] and printed "None:None" for every real input.)
+        if v.get("coinbase"):
+            print(f"  in{i}   coinbase")
+        else:
+            print(f"  in{i}   {v.get('txid')}:{v.get('vout')}")
     for i, v in enumerate(res.get("vout", [])):
-        spk = v.get("scriptpubkey") or {}
+        # The upstream JSON key is `scriptPubKey` (capital P/K) — the old
+        # lowercase lookup never matched, so the address/hex never printed.
+        spk = v.get("scriptPubKey") or {}
         addr = spk.get("address")
         line = f"  out{i}  {v.get('value')}"
         if addr:
