@@ -154,12 +154,19 @@ def main(argv):
     while i < len(argv):
         if argv[i] == "--file":
             i += 1
-            with open(argv[i], encoding="utf-8") as f:
-                addresses.extend(
-                    line.strip()
-                    for line in f
-                    if line.strip() and not line.startswith("#")
-                )
+            if i >= len(argv):
+                print("error: --file needs a path argument", file=sys.stderr)
+                return 2
+            try:
+                with open(argv[i], encoding="utf-8") as f:
+                    addresses.extend(
+                        line.strip()
+                        for line in f
+                        if line.strip() and not line.startswith("#")
+                    )
+            except OSError as e:
+                print(f"error: cannot read {argv[i]}: {e}", file=sys.stderr)
+                return 2
         else:
             addresses.append(argv[i])
         i += 1

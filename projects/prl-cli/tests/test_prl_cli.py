@@ -79,6 +79,11 @@ RESPONSES = {
 # endpoint streaming an unbounded response must be refused, not buffered.
 FLOOD_RESULT = "x" * (17 * 1024 * 1024)
 
+# Broken/hostile endpoint modes for the shape/transport regression tests:
+# "envelope_list" answers every call with a bare JSON list, "error_string"
+# with a non-object error member. Both are well-formed JSON, wrong shape.
+WEIRD = {"mode": None}
+
 
 def make_handler():
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -93,6 +98,20 @@ def make_handler():
                 return
             method = body.get("method")
             params = body.get("params", [])
+            if WEIRD["mode"] == "envelope_list":
+                data = b"[]"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            if WEIRD["mode"] == "error_string":
+                data = json.dumps({"error": "boom-string"}).encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             if method in RESPONSES:
                 result = RESPONSES[method]
             elif method == "flood":
@@ -418,6 +437,60 @@ class TestPrlCli(unittest.TestCase):
             r = run_prl("check", addr)
             self.assertEqual(r.returncode, 2, addr)
             self.assertIn("INVALID", r.stdout, addr)
+
+    # --- wrong-shape / transport failures must be clean exit-1 errors ---
+    # The CLI documents exit 1 for RPC/transport errors, but a broken or
+    # hostile endpoint returning well-formed JSON of the wrong shape (and
+    # plain transport failures like connection-refused) used to escape as
+    # Python tracebacks from .get/.len/slicing/err.get dereferences.
+    def _assert_clean_error(self, r, needle):
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn(needle, r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+
+    def test_status_null_result(self):
+        saved = (RESPONSES["getblockchaininfo"], RESPONSES["getmempoolinfo"])
+        RESPONSES["getblockchaininfo"] = None
+        RESPONSES["getmempoolinfo"] = None
+        try:
+            r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl", "status")
+        finally:
+            RESPONSES["getblockchaininfo"], RESPONSES["getmempoolinfo"] = saved
+        self._assert_clean_error(r, "unexpected result shape")
+
+    def test_mempool_dict_result(self):
+        saved = RESPONSES["getrawmempool"]
+        RESPONSES["getrawmempool"] = {"not": "a list"}
+        try:
+            r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl", "mempool")
+        finally:
+            RESPONSES["getrawmempool"] = saved
+        self._assert_clean_error(r, "unexpected result shape")
+
+    def test_envelope_list_and_error_string(self):
+        for mode, needle in (("envelope_list", "non-object JSON-RPC response"),
+                             ("error_string", "RPC error: boom-string")):
+            WEIRD["mode"] = mode
+            try:
+                r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl", "status")
+            finally:
+                WEIRD["mode"] = None
+            self._assert_clean_error(r, needle)
+
+    def test_transport_refused_is_clean(self):
+        port = _free_port()  # closed immediately: nothing listens there
+        r = run_prl("--rpc-url", f"http://127.0.0.1:{port}", "status")
+        self._assert_clean_error(r, "RPC transport error")
+
+    def test_block_huge_height_is_clean(self):
+        r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",
+                    "block", "9" * 5000)
+        self._assert_clean_error(r, "invalid block height")
+
+    def test_mempool_negative_limit(self):
+        r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",
+                    "mempool", "--limit", "-1")
+        self._assert_clean_error(r, "--limit must be a positive integer")
 
     def test_check_testnet(self):
         # Same program as the donation address under the testnet HRP.

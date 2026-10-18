@@ -8,7 +8,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
-from verify_pearl_address import verify, decode  # noqa: E402
+from verify_pearl_address import verify, decode, main  # noqa: E402
 
 DONATION = "prl1p62v09vuzyd8kdz9l23jaf3kph4wwx6jqcmhkkhg8lhr2qlxky8psu3zw9d"
 
@@ -96,6 +96,12 @@ class TestPearlAddressValidator(unittest.TestCase):
     def test_bip_vectors_bad(self):
         for addr in BIP_VECTORS_BAD:
             self.assertIsNone(decode(addr), addr)
+
+    def test_file_flag_errors_are_clean(self):
+        # `--file` with no path, or an unreadable path, used to escape as
+        # IndexError/FileNotFoundError tracebacks; both are usage errors.
+        self.assertEqual(main(["--file"]), 2)
+        self.assertEqual(main(["--file", "/nonexistent-pearl-addrs.txt"]), 2)
 
 
 if __name__ == "__main__":

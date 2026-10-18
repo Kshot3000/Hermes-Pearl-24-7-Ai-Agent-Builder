@@ -75,13 +75,18 @@ def rpc_call(target, method, params, user=None, password="", timeout=10.0):
         conn_cls = http.client.HTTPSConnection if scheme == "https" else http.client.HTTPConnection
         try:
             conn = conn_cls(hostport, timeout=timeout)
+            conn.request("POST", "/", body=body, headers=dict(headers))
+            resp = conn.getresponse()
+            # Read one byte past the cap so an oversized body is detectable.
+            raw = resp.read(MAX_RPC_RESPONSE_BYTES + 1)
+            conn.close()
+        except RuntimeError:
+            raise
         except Exception as e:
-            raise RuntimeError(f"bad rpc-url {target!r}: {e}")
-        conn.request("POST", "/", body=body, headers=dict(headers))
-        resp = conn.getresponse()
-        # Read one byte past the cap so an oversized body is detectable.
-        raw = resp.read(MAX_RPC_RESPONSE_BYTES + 1)
-        conn.close()
+            # Connection refused, timeouts, malformed HTTP, bad ports:
+            # transport failures are documented exit-1 errors, not
+            # tracebacks (main() converts RuntimeError only).
+            raise RuntimeError(f"RPC transport error: {e}")
         if len(raw) > MAX_RPC_RESPONSE_BYTES:
             raise RuntimeError(
                 f"RPC response exceeds {MAX_RPC_RESPONSE_BYTES} bytes — "
@@ -112,6 +117,10 @@ def rpc_call(target, method, params, user=None, password="", timeout=10.0):
                     raise RuntimeError(
                         f"RPC response exceeds {MAX_RPC_RESPONSE_BYTES} "
                         "bytes — refusing to buffer it")
+        except RuntimeError:
+            raise
+        except OSError as e:
+            raise RuntimeError(f"RPC transport error: {e}")
         finally:
             sock.close()
         head, _, payload = data.partition(b"\r\n\r\n")
@@ -128,10 +137,33 @@ def rpc_call(target, method, params, user=None, password="", timeout=10.0):
         msg = json.loads(raw)
     except Exception:
         raise RuntimeError(f"non-JSON response: {raw[:300]!r}")
-    if "error" in msg and msg["error"]:
+    # The envelope itself is endpoint-controlled: a well-formed JSON list,
+    # string, or number is not a JSON-RPC response, and an `error` member
+    # is not guaranteed to be an object — both used to crash the caller
+    # with AttributeError/TypeError tracebacks instead of exit 1.
+    if not isinstance(msg, dict):
+        raise RuntimeError(f"non-object JSON-RPC response: {raw[:300]!r}")
+    if msg.get("error"):
         err = msg["error"]
-        raise RuntimeError(f"RPC error {err.get('code')}: {err.get('message')}")
+        if isinstance(err, dict):
+            raise RuntimeError(f"RPC error {err.get('code')}: {err.get('message')}")
+        raise RuntimeError(f"RPC error: {err}")
     return msg.get("result")
+
+
+def _require(value, kind, method, what):
+    """Validate an RPC result's shape before a command renders it.
+
+    A broken or hostile endpoint can return valid JSON of the wrong shape
+    (null, a list where an object belongs, a dict where a list belongs);
+    every command used to dereference it blind (.get/.len/slicing) and die
+    with a traceback. Shape failures are RPC errors: exit 1, no traceback.
+    """
+    if not isinstance(value, kind):
+        raise RuntimeError(
+            f"{method}: unexpected result shape — expected {what}, "
+            f"got {type(value).__name__}")
+    return value
 
 
 class Client:
@@ -151,9 +183,9 @@ class Client:
 # Commands
 # ---------------------------------------------------------------------------
 def cmd_status(c, args):
-    info = c.call("getblockchaininfo")
+    info = _require(c.call("getblockchaininfo"), dict, "getblockchaininfo", "an object")
     diff = c.call("getdifficulty")
-    mem = c.call("getmempoolinfo")
+    mem = _require(c.call("getmempoolinfo"), dict, "getmempoolinfo", "an object")
     if args.json:
         print(json.dumps({"blockchain": info, "difficulty": diff, "mempool": mem},
                          indent=2))
@@ -180,10 +212,18 @@ def cmd_block(c, args):
     if ref is None or ref == "latest":
         block_hash = c.call("getbestblockhash") if ref == "latest" else c.call("getblockhash", 0)
     elif ref.isdigit():
-        block_hash = c.call("getblockhash", int(ref))
+        try:
+            height = int(ref)
+        except ValueError:
+            # isdigit() also accepts digit strings past Python's int
+            # conversion limit (4300 digits) and non-decimal digits like
+            # '²' — both used to escape as a ValueError traceback.
+            raise RuntimeError(f"invalid block height: {ref[:24]!r}")
+        block_hash = c.call("getblockhash", height)
     else:
         block_hash = ref
-    res = c.call("getblock", block_hash, 1)  # verbose=1 -> decoded object
+    _require(block_hash, str, "getblockhash/getbestblockhash", "a block hash string")
+    res = _require(c.call("getblock", block_hash, 1), dict, "getblock", "an object")  # verbose=1 -> decoded object
     if args.json:
         print(json.dumps(res, indent=2))
         return
@@ -204,7 +244,13 @@ def cmd_block(c, args):
 
 
 def cmd_tx(c, args):
-    res = c.call("getrawtransaction", args.hash, 1)  # verbose=1
+    res = _require(c.call("getrawtransaction", args.hash, 1), dict,
+                   "getrawtransaction", "an object")  # verbose=1
+    for field in ("vin", "vout"):
+        entries = res.get(field) or []
+        _require(entries, list, "getrawtransaction", f"a list for {field}")
+        for entry in entries:
+            _require(entry, dict, "getrawtransaction", f"objects in {field}")
     if args.json:
         print(json.dumps(res, indent=2))
         return
@@ -236,10 +282,15 @@ def cmd_tx(c, args):
 
 
 def cmd_mempool(c, args):
-    hashes = c.call("getrawmempool", False)
+    hashes = _require(c.call("getrawmempool", False), list,
+                      "getrawmempool", "a list of tx hashes")
     if args.json:
         print(json.dumps(hashes, indent=2))
         return
+    if args.limit is not None and args.limit < 1:
+        # A negative limit used to slice hashes[:-1] and silently drop
+        # entries while the header printed the negative count.
+        raise RuntimeError("--limit must be a positive integer")
     limit = args.limit or 20
     print(f"mempool: {len(hashes)} tx (showing {min(limit, len(hashes))})")
     for h in hashes[:limit]:
