@@ -48,7 +48,7 @@ Environment overrides: `PRL_RPC_URL`, `PRL_RPC_SOCKET`, `PRL_RPC_USER`,
 ## Tests
 
 ```bash
-python tests/test_prl_cli.py   # 21 tests, stdlib-only, mock node in-process
+python tests/test_prl_cli.py   # 23 tests, stdlib-only, mock node in-process
 ```
 
 The mock node models a real `pearld`'s wire rules (e.g. `getblock` rejects a

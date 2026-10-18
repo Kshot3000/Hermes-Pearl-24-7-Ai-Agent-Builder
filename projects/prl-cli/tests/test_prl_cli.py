@@ -75,6 +75,10 @@ RESPONSES = {
                        "protocolversion": 70015, "connections": 8},
 }
 
+# One MiB past MAX_RPC_RESPONSE_BYTES in prl (16 MiB): a broken/hostile
+# endpoint streaming an unbounded response must be refused, not buffered.
+FLOOD_RESULT = "x" * (17 * 1024 * 1024)
+
 
 def make_handler():
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -91,6 +95,8 @@ def make_handler():
             params = body.get("params", [])
             if method in RESPONSES:
                 result = RESPONSES[method]
+            elif method == "flood":
+                result = FLOOD_RESULT
             elif method == "getblock":
                 # Model a real pearld: getblock's first param is a hash
                 # STRING (upstream rpcserverhelp: (*string)(nil)) — a
@@ -188,6 +194,9 @@ def make_sock_server(path):
                 if method in RESPONSES:
                     out = json.dumps({"jsonrpc": "2.0", "id": 1,
                                       "result": RESPONSES[method]}).encode()
+                elif method == "flood":
+                    out = json.dumps({"jsonrpc": "2.0", "id": 1,
+                                      "result": FLOOD_RESULT}).encode()
                 elif method == "getblockhash" and params and params[0] in (0, 115681):
                     out = json.dumps({"jsonrpc": "2.0", "id": 1,
                                       "result": "a" * 64}).encode()
@@ -342,6 +351,18 @@ class TestPrlCli(unittest.TestCase):
                     "raw", "getblockhash", "115681")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("a" * 64, r.stdout)
+
+    def test_http_response_too_large(self):
+        r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",
+                    "raw", "flood")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("refusing to buffer", r.stderr)
+
+    @unittest.skipUnless(hasattr(socket, "AF_UNIX"), "AF_UNIX unavailable on this platform")
+    def test_unix_socket_response_too_large(self):
+        r = run_prl("--socket", self.sock, "raw", "flood")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("refusing to buffer", r.stderr)
 
     def test_unknown_method(self):
         r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",

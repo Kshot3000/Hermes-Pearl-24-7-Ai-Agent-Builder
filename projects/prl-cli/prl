@@ -47,6 +47,15 @@ def _load_validator():
 # ---------------------------------------------------------------------------
 # JSON-RPC transport (HTTP and Unix socket)
 # ---------------------------------------------------------------------------
+# A response is buffered whole before parsing, so its size is capped: a
+# broken or hostile endpoint (or anything answering on the configured
+# target) could otherwise stream forever and OOM the CLI. 16 MiB matches
+# the wPRL backend's RpcClient bound — the largest legitimate replies
+# (verbose blocks / transactions, getrawmempool hash lists) stay far
+# below it.
+MAX_RPC_RESPONSE_BYTES = 16 * 1024 * 1024
+
+
 def rpc_call(target, method, params, user=None, password="", timeout=10.0):
     """One JSON-RPC call. target is http(s)://host:port or a unix socket path."""
     body = json.dumps({"jsonrpc": "2.0", "id": 1,
@@ -70,8 +79,13 @@ def rpc_call(target, method, params, user=None, password="", timeout=10.0):
             raise RuntimeError(f"bad rpc-url {target!r}: {e}")
         conn.request("POST", "/", body=body, headers=dict(headers))
         resp = conn.getresponse()
-        raw = resp.read()
+        # Read one byte past the cap so an oversized body is detectable.
+        raw = resp.read(MAX_RPC_RESPONSE_BYTES + 1)
         conn.close()
+        if len(raw) > MAX_RPC_RESPONSE_BYTES:
+            raise RuntimeError(
+                f"RPC response exceeds {MAX_RPC_RESPONSE_BYTES} bytes — "
+                "refusing to buffer it")
         status, reason = resp.status, resp.reason
     else:
         # Unix socket: hand-rolled minimal HTTP/1.0 request
@@ -91,6 +105,13 @@ def rpc_call(target, method, params, user=None, password="", timeout=10.0):
                 if not chunk:
                     break
                 data += chunk
+                # `data` still carries the response head here; the head
+                # is a few hundred bytes, so the cap plus a 64 KiB head
+                # allowance bounds the payload at the same limit.
+                if len(data) > MAX_RPC_RESPONSE_BYTES + 65536:
+                    raise RuntimeError(
+                        f"RPC response exceeds {MAX_RPC_RESPONSE_BYTES} "
+                        "bytes — refusing to buffer it")
         finally:
             sock.close()
         head, _, payload = data.partition(b"\r\n\r\n")
