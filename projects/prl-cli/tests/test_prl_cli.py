@@ -4,6 +4,7 @@
 Run:  python -m pytest tests/test_prl_cli.py   (or)  python tests/test_prl_cli.py
 Stdlib-only.
 """
+import copy
 import http.server
 import json
 import os
@@ -126,11 +127,16 @@ def make_handler():
                     return
                 if ref == "a" * 64:
                     result = FAKE_BLOCK
+                    if WEIRD["mode"] == "block_tx_int":
+                        result = dict(FAKE_BLOCK, tx=123)
                 else:
                     self._reply(-5, "Block not found")
                     return
             elif method == "getrawtransaction":
                 result = FAKE_COINBASE_TX if params[0] == "c" * 64 else FAKE_TX
+                if WEIRD["mode"] == "tx_spk_string":
+                    result = copy.deepcopy(FAKE_TX)
+                    result["vout"][0]["scriptPubKey"] = "not-an-object"
             elif method == "getblockhash":
                 if params[0] in (0, 115681):
                     result = "a" * 64
@@ -486,6 +492,37 @@ class TestPrlCli(unittest.TestCase):
         r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",
                     "block", "9" * 5000)
         self._assert_clean_error(r, "invalid block height")
+
+    def test_tx_scriptpubkey_wrong_shape(self):
+        # The vin/vout entries were shape-checked in the 02:13 sweep, but
+        # the nested scriptPubKey object was dereferenced blind: a string
+        # there died on .get with an AttributeError traceback.
+        WEIRD["mode"] = "tx_spk_string"
+        try:
+            r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",
+                        "tx", "d" * 64)
+        finally:
+            WEIRD["mode"] = None
+        self._assert_clean_error(r, "unexpected result shape")
+
+    def test_block_tx_wrong_shape(self):
+        # len(res.tx) on an int raised TypeError; on a dict it silently
+        # reported the key count as the transaction count.
+        WEIRD["mode"] = "block_tx_int"
+        try:
+            r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",
+                        "block", "a" * 64)
+        finally:
+            WEIRD["mode"] = None
+        self._assert_clean_error(r, "unexpected result shape")
+
+    @unittest.skipUnless(hasattr(socket, "AF_UNIX"), "AF_UNIX unavailable on this platform")
+    def test_socket_negative_timeout_is_clean(self):
+        # sock.settimeout() sat before the converting try, so an
+        # out-of-range timeout raised ValueError as a traceback on the
+        # socket path while the HTTP path converted the same failure.
+        r = run_prl("--socket", self.sock, "--timeout", "-1", "status")
+        self._assert_clean_error(r, "RPC transport error")
 
     def test_mempool_negative_limit(self):
         r = run_prl("--rpc-url", self.url, "--user", "prl", "--pass", "prl",

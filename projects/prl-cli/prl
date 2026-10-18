@@ -97,8 +97,11 @@ def rpc_call(target, method, params, user=None, password="", timeout=10.0):
         if not hasattr(socket, "AF_UNIX"):
             raise RuntimeError("Unix socket RPC is not available on this platform")
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
         try:
+            # settimeout is inside the try: an out-of-range timeout raises
+            # ValueError there, and the HTTP path above converts the same
+            # failure to RuntimeError — the socket path used to traceback.
+            sock.settimeout(timeout)
             sock.connect(target)
             req = (b"POST / HTTP/1.0\r\nHost: localhost\r\n" +
                    b"".join(f"{k}: {v}\r\n".encode() for k, v in headers) +
@@ -119,7 +122,7 @@ def rpc_call(target, method, params, user=None, password="", timeout=10.0):
                         "bytes — refusing to buffer it")
         except RuntimeError:
             raise
-        except OSError as e:
+        except Exception as e:
             raise RuntimeError(f"RPC transport error: {e}")
         finally:
             sock.close()
@@ -238,7 +241,11 @@ def cmd_block(c, args):
     print(f"bits       {res.get('bits')}")
     print(f"time       {res.get('time')}")
     print(f"difficulty {res.get('difficulty')}")
-    print(f"txs        {len(res.get('tx', []))}")
+    # `tx` is rendered by len() only, but a wrong-shaped value still broke
+    # the clean-error contract: an int/None tx raised TypeError, and a dict
+    # tx silently reported its key count as the transaction count.
+    txs = _require(res.get("tx", []), list, "getblock", "a list for tx")
+    print(f"txs        {len(txs)}")
     print(f"merkle     {res.get('merkleroot')}")
     print(f"proof      {res.get('proofcommitment')}")
 
@@ -272,7 +279,12 @@ def cmd_tx(c, args):
     for i, v in enumerate(res.get("vout", [])):
         # The upstream JSON key is `scriptPubKey` (capital P/K) — the old
         # lowercase lookup never matched, so the address/hex never printed.
-        spk = v.get("scriptPubKey") or {}
+        # The entry itself was shape-checked above, but this nested object
+        # was not: a string/list scriptPubKey died on .get with a traceback.
+        spk = v.get("scriptPubKey")
+        if spk is None:
+            spk = {}
+        _require(spk, dict, "getrawtransaction", "an object for scriptPubKey")
         addr = spk.get("address")
         line = f"  out{i}  {v.get('value')}"
         if addr:
@@ -345,7 +357,8 @@ def cmd_raw(c, args):
 def cmd_version(c, args):
     print(f"prl-cli {VERSION} — 24/7 Pearl agent (https://github.com/Kshot3000/Hermes-Pearl-24-7-Ai-Agent-Builder)")
     try:
-        print(f"node version {c.call('getnetworkinfo').get('version')}")
+        info = _require(c.call("getnetworkinfo"), dict, "getnetworkinfo", "an object")
+        print(f"node version {info.get('version')}")
     except Exception as e:
         print(f"node unreachable: {e}")
 
